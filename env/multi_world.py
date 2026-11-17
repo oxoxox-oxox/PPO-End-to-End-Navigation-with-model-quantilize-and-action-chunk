@@ -17,8 +17,8 @@ Usage (with train_ppo.py --worlds / env.worlds in configs/train.yaml):
     ]
     env = MultiWorldIrSimEnv(entries, reward_cfg, obs_cfg, env_cfg, seed=0)
 
-The interface matches IrSimEnv (obs_dim / action_dim / reset / step_single / close),
-so it can be wrapped directly by PPOGymEnv. The obs contract (lidar 100 beams ±90°, goal 3, prev 2) must be identical across worlds.
+The interface matches IrSimEnv (obs_dim / action_dim / reset / step_single / step_chunk / close),
+so it can be wrapped directly by PPOGymEnv. The obs contract (lidar 100 beams ±90°, goal 3, prev N*2) must be identical across worlds.
 """
 
 from __future__ import annotations

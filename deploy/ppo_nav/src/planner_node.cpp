@@ -75,11 +75,11 @@ class PlannerNode {
     pnh.param("laser_yaw_fallback_deg", laser_yaw_fallback_deg_, 180.0);
     params_.laser_yaw_in_base = laser_yaw_fallback_deg_ * M_PI / 180.0;
 
-    // action chunk length N (determines the obs dim and open-loop execution steps; PPO currently fixed at 1)
+    // action chunk length N (determines the obs dim and open-loop execution steps; N=1 or N=5)
     pnh.param("chunk_size", params_.chunk_size, 1);
     if (params_.chunk_size < 1) params_.chunk_size = 1;
 
-    // whether to write the previous action back into obs (the current PPO model has it always 0 during training, keep false)
+    // whether to write the previous action back into obs (N=1 -> false, N=5 -> true; must match the loaded model)
     pnh.param("use_prev_action", use_prev_action_, false);
 
     // normalized action -> real velocity mapping + command clamps
@@ -256,7 +256,7 @@ class PlannerNode {
       }
     }
 
-    // Take the current step's action (engine output is step-major: each step [lin, ang]; PPO N=1 -> 2 elements)
+    // Take the current step's action (engine output is step-major: each step [lin, ang]; N=1 -> 2 elements, N=5 -> 10 elements)
     const int n = 2;
     if (static_cast<int>(pending_.size()) < n) {
       pending_.clear();

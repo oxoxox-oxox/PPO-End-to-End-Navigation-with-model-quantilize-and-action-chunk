@@ -5,9 +5,9 @@ deterministic actions (model.predict(deterministic=True)),
 outputs success/collision/timeout rates, average steps, average reward.
 
 Usage:
-    python src/eval_ppo.py --checkpoint checkpoints/ppo_mw_N1/best_model.zip        # headless 20 episodes
-    python src/eval_ppo.py --checkpoint checkpoints/ppo_mw_N1/best_model.zip --episodes 3 --display   # visualization
-    python src/eval_ppo.py --checkpoint checkpoints/ppo_mw_N1/best_model.zip \
+    python src/eval_ppo.py --checkpoint checkpoints/ppo_final_N1/best_model.zip        # headless 20 episodes (N=1 or N=5 auto-detected)
+    python src/eval_ppo.py --checkpoint checkpoints/ppo_final_N5/best_model.zip --episodes 3 --display   # visualization
+    python src/eval_ppo.py --checkpoint checkpoints/ppo_final_N1/best_model.zip \
         --world configs/world/robot_world.yaml                                          # switch eval world
 """
 
@@ -83,7 +83,7 @@ def main() -> None:
         description="SB3 PPO model evaluation (train with src/train_ppo.py)"
     )
     ap.add_argument("--checkpoint", required=True,
-                    help="SB3 zip model path, e.g. checkpoints/ppo_mw_N1/best_model.zip")
+                    help="SB3 zip model path, e.g. checkpoints/ppo_final_N1/best_model.zip")
     ap.add_argument("--config", default="configs/train.yaml")
     ap.add_argument("--episodes", type=int, default=20, help="number of eval episodes")
     ap.add_argument("--seed", type=int, default=0)

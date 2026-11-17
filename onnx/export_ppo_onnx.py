@@ -1,16 +1,15 @@
 """Export the unpacked PPO Actor as a pure FP32 ONNX (for building TensorRT 8.5 engines / INT8 PTQ on the robot).
 
-Prerequisite (run onnx/unpack_ppo_actor.py in rl_env to produce policy_actor.pt + actor_config.yaml);
-this script runs in the ir-sim env (has onnx/onnxruntime, no SB3 dependency, pure torch forward).
+Prerequisite: run onnx/unpack_ppo_actor.py first to produce policy_actor.pt + actor_config.yaml.
 
 Usage:
-    d:/anaconda/envs/ir-sim/python.exe onnx/export_ppo_onnx.py --actor export/ppo_final_N1/policy_actor.pt
+    python onnx/export_ppo_onnx.py --actor export/ppo_final_N1/policy_actor.pt
     # also generate INT8 calibration data (rollout with the policy in the training world to collect real obs)
-    d:/anaconda/envs/ir-sim/python.exe onnx/export_ppo_onnx.py --actor export/ppo_final_N1/policy_actor.pt --make-calib
+    python onnx/export_ppo_onnx.py --actor export/ppo_final_N1/policy_actor.pt --make-calib
 
 Artifacts (export/{name}/):
-    actor_fp32_bs{N}.onnx   # fixed-batch pure FP32 graph (only Gemm/Tanh), input obs [B,105], output action [B,2] (μ, needs clipping robot-side)
-    calib_obs.npz           # generated with --make-calib, key='obs', shape (N,105) float32, for INT8 PTQ calibration
+    actor_fp32_bs{N}.onnx   # fixed-batch pure FP32 graph (only Gemm/Tanh), input obs [B,obs_dim], output action [B,act_dim] (μ, needs clipping robot-side)
+    calib_obs.npz           # generated with --make-calib, key='obs', shape (N,obs_dim) float32, for INT8 PTQ calibration
 """
 
 from __future__ import annotations

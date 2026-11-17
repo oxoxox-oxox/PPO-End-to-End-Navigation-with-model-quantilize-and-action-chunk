@@ -79,7 +79,7 @@ model:
   hidden2: 1024             # SB3 MlpPolicy second hidden layer width
 
 chunk:
-  size: 1                   # action chunking: N. 1=no chunking (PPO currently single-step N=1)
+  size: 1                   # action chunking length N (1=single-step, 5=5-step chunk; overridable via --chunk)
 
 eval:
   max_steps: 1800           # eval per-episode step cap (matches training 83ms/step x 1800)

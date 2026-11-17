@@ -1,8 +1,24 @@
 <launch>
   <arg name="engine_path" default="$(find ppo_nav)/models/actor_int8_n5.engine"/>
+  <arg name="chunk_size" default="5"/>
+  <arg name="use_prev_action" default="true"/>
+  <arg name="max_linear" default="0.8"/>
+  <arg name="max_angular" default="1.0"/>
+  <arg name="goal_x" default="5.0"/>
+  <arg name="goal_y" default="5.0"/>
+  <arg name="min_decision_period" default="0.0"/>
+  <arg name="debug_log" default="false"/>
 
   <rosparam file="$(find ppo_nav)/config/params.yaml" command="load"/>
-  <param name="planner/engine_path" value="$(arg engine_path)"/>
+  <param name="planner/engine_path" value="$(arg engine_path)" type="str"/>
+  <param name="planner/chunk_size" value="$(arg chunk_size)" type="int"/>
+  <param name="planner/use_prev_action" value="$(arg use_prev_action)" type="bool"/>
+  <param name="planner/max_linear" value="$(arg max_linear)" type="double"/>
+  <param name="planner/max_angular" value="$(arg max_angular)" type="double"/>
+  <param name="planner/goal_x" value="$(arg goal_x)" type="double"/>
+  <param name="planner/goal_y" value="$(arg goal_y)" type="double"/>
+  <param name="planner/min_decision_period" value="$(arg min_decision_period)" type="double"/>
+  <param name="planner/debug_log" value="$(arg debug_log)" type="bool"/>
 
   <node pkg="ppo_nav" type="planner_node" name="planner_node" output="screen"/>
 

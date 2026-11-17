@@ -1,111 +1,113 @@
-# PPO Model Structure Analysis
+English | [中文](ppo_structure_analysis_zh.md)
 
-> Purpose: analyze the network structure of the trained PPO models in this repository, in preparation for real-robot INT8 quantization and action chunking (N=5).
-> All structural information comes from **actually loading the models** (SB3 2.9.0 / torch 2.11.0); reproduction script: `doc/analyze_ppo_structure.py`,
-> raw output: `doc/ppo_structure_report.txt`.
+# PPO Model Structure Specification (N=1 & N=5)
 
----
-
-## 1. PPO Model Inventory in This Repository
-
-| Path | Source | obs dim | Action space | net_arch | Total policy params | Training steps (num_timesteps) |
-| --- | --- | --- | --- | --- | --- | --- |
-| `checkpoints/ppo_N1/best_model.zip` | ir-sim full training (EvalCallback best) | 105 | [-1,1]² | [1024,1024] | 2,319,365 | 240,000 |
-| `checkpoints/ppo_N1/ppo_model.zip` | ir-sim full training (final model) | 105 | [-1,1]² | [1024,1024] | 2,319,365 | 300,032 |
-| `checkpoints/ppo_smoke_N1/best_model.zip` | ir-sim smoke test | 105 | [-1,1]² | [1024,1024] | 2,319,365 | 10,000 |
-| `checkpoints/ppo_smoke_N1/ppo_model.zip` | ir-sim smoke test | 105 | [-1,1]² | [1024,1024] | 2,319,365 | 20,480 |
-
-The project's main models are **`checkpoints/ppo_final_N1/` and `checkpoints/ppo_final_N5/`** (83ms step, used for the INT8+N=5 ablation;
-structure identical to the 1024×1024 below, only obs/action dims differ); `checkpoints/ppo_mw_N1/` (multi-world retrain v2) has exactly the same structure as ppo_N1, only the weights differ.
-
-> Note: the original amr_rl_ws (Gazebo/ROS2) training workspace and `demos/` demos have been removed from the repository (GitHub: `wyh010731/amr_rl_ws`);
-> this repository keeps only the models and deployment for the ir-sim contract (PPO single-step / action chunk).
+> Purpose: document the SB3 PPO policy architecture, exact parameter counts, and deployment contracts for both **N=1** (`ppo_final_N1`) and **N=5** (`ppo_final_N5`) models in this repository.
+> Checkpoints are not pre-bundled in the repo (`checkpoints/` is gitignored). Once trained locally, you can inspect any `.zip` with `python doc/analyze_ppo_structure.py`. An archived raw dump from earlier N=1 checkpoints (`ppo_N1` / `ppo_smoke_N1`) is kept at `doc/ppo_structure_report.txt` for reference.
 
 ---
 
-## 2. Main Model Structure (checkpoints/ppo_mw_N1 / ppo_N1, ir-sim env, same architecture)
+## 1. Policy Architecture Overview
 
-Common attributes (identical across all 4 zips):
+Both N=1 and N=5 share the same SB3 `PPO` (`MlpPolicy` / `ActorCriticPolicy`) configuration (`net_arch=[1024, 1024]`):
 
-- Algorithm: SB3 PPO, `MlpPolicy` (i.e. `ActorCriticPolicy`), continuous Gaussian action distribution (DiagGaussian)
-- Activation: **Tanh** (SB3 MlpPolicy default)
-- `squash_output=False`: action output has **no tanh squashing**, deterministic prediction = `clip(μ, [-1, 1])`
-- `share_features_extractor=True`: for MlpPolicy this is just an identity FlattenExtractor, **no real weight sharing**
+- Algorithm: Stable-Baselines3 `PPO`, `ActorCriticPolicy`, continuous diagonal Gaussian (`DiagGaussianDistribution`)
+- Activation: **Tanh** (hidden layers only)
+- `squash_output=False`: no output `tanh`; deterministic action is `clip(μ, [-1, 1])`
+- `share_features_extractor=True`: for `MlpPolicy` this uses an identity `FlattenExtractor`, while `mlp_extractor.policy_net` and `mlp_extractor.value_net` are **two independent MLPs with no shared weights**
 
-### 2.1 Network Architecture (printed from the actually loaded model)
+### 1.1 Network Topology & Parameter Counts
 
-```
-obs (105,) ──┬─> Actor(policy):                      params
-             │    Linear(105 -> 1024) + Tanh        108,544
-             │    Linear(1024 -> 1024) + Tanh     1,049,600
-             │    Linear(1024 -> 2)                  2,050
-             │    └─ μ (2,); plus 2 learnable log_std params
-             └─> Critic(value):
-                  Linear(105 -> 1024) + Tanh        108,544
-                  Linear(1024 -> 1024) + Tanh     1,049,600
-                  Linear(1024 -> 1)                  1,025
+#### Variant A: N=1 Single-Step (`obs_dim=105`, `action_dim=2`)
+
+```text
+obs (105,) ──┬─> Actor (exported to ONNX):            params       MACs
+             │    Linear(105 -> 1024) + Tanh         108,544    107,520
+             │    Linear(1024 -> 1024) + Tanh      1,049,600  1,048,576
+             │    Linear(1024 -> 2)                    2,050      2,048
+             │    └─ μ (2,)  [+ 2 learnable log_std params in SB3]
+             └─> Critic (training only):
+                  Linear(105 -> 1024) + Tanh         108,544
+                  Linear(1024 -> 1024) + Tanh      1,049,600
+                  Linear(1024 -> 1)                    1,025
                   └─ V (1,)
 ```
 
-Key points:
+- Actor params (excl. `log_std`): **1,160,194** (~1.16M)
+- Total SB3 `policy` params (Actor + `log_std` + Critic): **2,319,365** (~2.32M)
+- Actor forward MACs: **1,158,144** (~1.16M)
 
-- In SB3, `net_arch=[1024,1024]` is equivalent to `dict(pi=[1024,1024], vf=[1024,1024])`: Actor and Critic are **two independent MLPs, weights not shared**
-- Actor params (excluding log_std): 1,160,194 ≈ **1.16M**; Critic: 1,159,169; total policy params: **2,319,365 ≈ 2.32M**
-- Per-forward MACs: 105×1024 + 1024×1024 + 1024×2 = **1,158,144 ≈ 1.16M** (pure GEMM across the whole graph)
+#### Variant B: N=5 Action Chunk (`obs_dim=113`, `action_dim=10`)
 
-### 2.2 Hyperparameters (values saved in the zips)
+```text
+obs (113,) ──┬─> Actor (exported to ONNX):            params       MACs
+             │    Linear(113 -> 1024) + Tanh         116,736    115,712
+             │    Linear(1024 -> 1024) + Tanh      1,049,600  1,048,576
+             │    Linear(1024 -> 10)                  10,250     10,240
+             │    └─ μ (10,) = 5×[lin, ang] [+ 10 log_std params in SB3]
+             └─> Critic (training only):
+                  Linear(113 -> 1024) + Tanh         116,736
+                  Linear(1024 -> 1024) + Tanh      1,049,600
+                  Linear(1024 -> 1)                    1,025
+                  └─ V (1,)
+```
 
-| Hyperparameter | Value |
-| --- | --- |
-| learning_rate | 3e-4 |
-| gamma | 0.99 |
-| gae_lambda | 0.95 |
-| n_steps | 1024 |
-| batch_size | 128 |
-| n_epochs | 10 |
-| clip_range | 0.2 (constant) |
-| ent_coef | 0.0 |
-| vf_coef | 0.5 |
-| max_grad_norm | 0.5 |
-
-Forward check: `obs (1,105) -> dist mean (1,2), value (1,1)`.
+- Actor params (excl. `log_std`): **1,176,586** (~1.18M)
+- Total SB3 `policy` params (Actor + `log_std` + Critic): **2,343,957** (~2.34M)
+- Actor forward MACs: **1,174,528** (~1.175M)
 
 ---
 
-## 3. Implications for the Follow-Up Work
+## 2. Training Hyperparameters (`src/train_ppo.py` + `configs/train.yaml`)
+
+| Hyperparameter | Recommended (`ppo_final`, 83ms step) | `train_ppo.py` CLI default |
+| --- | --- | --- |
+| `step_time` | `0.0833s` (12Hz, in `configs/train.yaml`) | from `configs/train.yaml` |
+| `max_steps` | `1800` (in `configs/train.yaml`) | from `configs/train.yaml` |
+| `n_steps` | `4096` (`--n-steps 4096`) | `1024` |
+| `ent_coef` | `0.01` (`--ent-coef 0.01`) | `0.0` |
+| `learning_rate` | `3e-4` | `3e-4` |
+| `batch_size` | `128` | `128` |
+| `n_epochs` | `10` | `10` |
+| `gamma` | `0.99` | `0.99` |
+| `gae_lambda` | `0.95` | `0.95` |
+| `clip_range` | `0.2` (constant) | `0.2` |
+| `vf_coef` | `0.5` | `0.5` |
+| `max_grad_norm` | `0.5` | `0.5` |
+
+---
+
+## 3. Implications for INT8 Quantization & Action Chunking
 
 ### 3.1 INT8 Quantization
 
-- Only the **Actor** part is needed for ONNX export: `mlp_extractor.policy_net` + `action_net`; input `[B,105]` FP32, output μ `[B,2]`
-- The whole graph is only `Gemm` + `Tanh` (obs normalization is done on the obs-construction side, not in the network), **no conv, no BN** → TensorRT can do full-graph INT8
-  (a pure MLP can be down-precisioned across the whole graph, avoiding Reformat casts, consistent with previous conclusions)
-- Deterministic action = `clip(μ, [-1,1])`; quantization error first acts on μ; μ's value range is friendly to INT8 representation
-- **Already implemented**: `onnx/unpack_ppo_actor.py` (SB3 zip → pure weights) + `onnx/export_ppo_onnx.py` (→ ONNX + calibration data);
-  the exported graph ops are only `[Gemm, Tanh]` (opset 17), onnxruntime vs torch output max-abs-diff ≈ 7e-7;
-  build the on-board INT8 engine with `deploy/ppo_nav/scripts/build_ptq_engine.py` (real-obs calibration)
+- Only the **Actor** subgraph (`mlp_extractor.policy_net` + `action_net`) is unpacked and exported to ONNX (`[B, obs_dim] -> [B, action_dim]`, FP32).
+- The exported ONNX contains only **`Gemm` + `Tanh`** (opset 17), with **no `Conv` and no `BatchNorm`** (observation normalization happens in `IrSimEnv` / `ObsBuilder`). TensorRT can execute the full graph without conv/reformat casts.
+- Output μ is un-squashed and clipped to `[-1, 1]` on the deployment side before `scale_action`.
+- Export pipeline: `onnx/unpack_ppo_actor.py` → `onnx/export_ppo_onnx.py` (`--make-calib`), followed by on-board `deploy/ppo_nav/scripts/build_ptq_engine.py` (`--batch-size 1`).
 
-### 3.2 Action Chunking (N=5, already implemented)
+### 3.2 Action Chunking (`N=5`)
 
-- The current PPO single-step policy outputs only `(B,2)` per inference; the N=5 refactor uses "training-side action space changed to `(B, 2N)`":
-  the network outputs 5 steps of actions, and the "previous chunk action" obs dim is correspondingly `5*action_dim` (obs 113 dims).
-- Training: `src/train_ppo.py --chunk 5` (`step_chunk` open-loop execution, obs encodes the previous chunk's actions).
-- Deployment: the planner in `deploy/ppo_nav` produces N steps per inference and pushes them into pending_, then the next N-1 frames only pop actions without inference
-  (open-loop), cutting inference frequency to 1/N; with `use_prev_action=true` it writes the previous chunk's actions back into obs.
+- Training (`src/train_ppo.py --chunk 5`): `PPOGymEnv` expands the action space to `(2*N,) = (10,)` and executes `IrSimEnv.step_chunk` open-loop for 5 steps per decision, writing the executed 5-step chunk back into the previous-action observation channel (`5 * 2 = 10` dims, total `obs_dim = 113`).
+- Deployment (`deploy/ppo_nav`): `planner_node` runs inference once every `chunk_size=5` `/scan` frames, pushes the 5 action pairs into `pending_`, pops one pair per frame open-loop, and with `use_prev_action=true` writes the executed chunk back into `ObsBuilder::setPrevChunk`.
 
-### 3.3 Contract Difference Summary
+### 3.3 Contract Comparison Summary
 
-| Item | N=1 model (checkpoints/ppo_final_N1) | N=5 model (checkpoints/ppo_final_N5) |
+| Item | N=1 (`ppo_final_N1`) | N=5 (`ppo_final_N5`) |
 | --- | --- | --- |
-| obs | 105 = 100 lidar + goal 3 + prev action 2 (always 0 during training) | 113 = 100 lidar + goal 3 + prev chunk 10 |
-| action | [-1,1]² (mapped to vel_min/vel_max) | [-1,1]¹⁰ (5 steps × [lin,ang]) |
-| network | 1024×1024 (pi/vf independent), ≈1.16M params | same, only input/output dims differ |
-| training env | ir-sim 2D (configs/world/*.yaml) | same |
+| `obs` | `105` = `100` lidar + `3` goal + `2` prev action (always 0 in training) | `113` = `100` lidar + `3` goal + `10` prev chunk |
+| `action` | `[-1, 1]²` (single `[lin, ang]`) | `[-1, 1]¹⁰` (5 steps × `[lin, ang]`) |
+| Actor params (excl. `log_std`) | `1,160,194` (~1.16M), `1.158M` MACs | `1,176,586` (~1.18M), `1.175M` MACs |
+| Deployment args | `chunk_size:=1 use_prev_action:=false` | `chunk_size:=5 use_prev_action:=true` |
 
 ---
 
-## 4. Reproduction
+## 4. Inspecting Local Checkpoints
+
+After training checkpoints into `checkpoints/`, inspect them with:
 
 ```bash
-d:\anaconda\envs\rl_env\python.exe doc\analyze_ppo_structure.py
-# prints per-model layer-by-layer structure / param counts / hyperparameters, and saves doc\ppo_structure_report.txt
+python doc/analyze_ppo_structure.py
+# Or specify exact checkpoint paths:
+python doc/analyze_ppo_structure.py checkpoints/ppo_final_N1/best_model.zip checkpoints/ppo_final_N5/best_model.zip
 ```

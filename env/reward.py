@@ -1,14 +1,14 @@
 """Reward function design (aligned with SIM.get_reward from DRL-robot-navigation-IR-SIM + goal shaping).
 
 Per-step reward:
-    - reached goal: +goal_reward (default 100)
-    - collision:    +collision_penalty (default -100)
+    - reached goal: +goal_reward (RewardFn fallback default 100.0; configs/train.yaml sets 400.0)
+    - collision:    +collision_penalty (default -100.0)
     - otherwise:    +lin_vel - ang_penalty_scale*|ang_vel| - obstacle proximity penalty
                     - time_penalty                       # per-step time penalty (encourages fast arrival)
                     + goal_angle_coef * cos(angle to goal)      # heading toward the goal yields reward (fixes open-field circling)
                     + goal_dist_coef * (prev_dist - dist)       # approaching-goal shaping (potential-style, per meter)
 
-where the obstacle proximity penalty is: when min(laser distance) < proximity_threshold (1.35),
+where the obstacle proximity penalty is: when min(laser distance) < proximity_threshold (fallback default 0.5; configs/train.yaml sets 5),
    subtract proximity_scale * (proximity_threshold - min_laser), the closer the larger the penalty.
 """
 

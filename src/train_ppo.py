@@ -1,18 +1,19 @@
-"""SB3 PPO single-step (N=1) training script (ir-sim env).
+"""SB3 PPO training script (ir-sim env, supports N=1 single-step and N=5 action chunking via --chunk).
 
 Separated from src/eval_ppo.py: this file only does training (including the
 periodic eval by EvalCallback during training and best_model saving);
 use src/eval_ppo.py for the detailed evaluation after training.
 
 Usage:
-    python src/train_ppo.py --steps 300000 --device cuda   # full training
+    python src/train_ppo.py --steps 300000 --device cuda --name ppo_final --chunk 1 --ent-coef 0.01 --n-steps 4096
+    python src/train_ppo.py --steps 300000 --device cuda --name ppo_final --chunk 5 --ent-coef 0.01 --n-steps 4096
     python src/train_ppo.py --steps 20000 --device cpu      # smoke test
 
 Artifacts:
-    checkpoints/{name}_N1/best_model.zip   # eval-best saved by EvalCallback
-    checkpoints/{name}_N1/ppo_model.zip    # final model at the end of training
-    runs/{name}_N1/evaluations.npz         # eval curve (eval/success_rate etc.)
-    runs/{name}_N1/tensorboard/            # TB logs
+    checkpoints/{name}_N{chunk}/best_model.zip   # eval-best saved by SuccessRateEvalCallback
+    checkpoints/{name}_N{chunk}/ppo_model.zip    # final model at the end of training
+    runs/{name}_N{chunk}/evaluations.npz         # eval curve (eval/success_rate etc.)
+    runs/{name}_N{chunk}/tensorboard/            # TB logs
 """
 
 from __future__ import annotations
@@ -194,7 +195,7 @@ def make_env(cfg: dict, world_key: str, seed: int, display: bool = False):
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="SB3 PPO single-step baseline training (evaluate with src/eval_ppo.py)"
+        description="SB3 PPO training (N=1 / N=5 via --chunk; evaluate with src/eval_ppo.py)"
     )
     ap.add_argument("--config", default="configs/train.yaml")
     ap.add_argument("--name", default="ppo")

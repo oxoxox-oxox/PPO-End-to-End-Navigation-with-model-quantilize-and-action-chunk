@@ -1,8 +1,8 @@
 world:
   height: 10  # the height of the world
   width: 10   # the height of the world
-  step_time: 0.3  # 10Hz calculate each step
-  sample_time: 0.3  # 10 Hz for render and data extraction
+  step_time: 0.3  # ~3.3Hz default (overridden to 0.0833s / 12Hz by configs/train.yaml during training)
+  sample_time: 0.3  # ~3.3Hz render/data extraction default
   collision_mode: 'stop'
 
 robot:

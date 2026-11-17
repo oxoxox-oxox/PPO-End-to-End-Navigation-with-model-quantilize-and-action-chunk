@@ -2,7 +2,7 @@
 # far away (>8m from start/goal) so the 7m lidar sees nothing -> all-max obs.
 # Goal: bring "all-clear lidar" observations into the training distribution
 # to fix the open-field circling behavior. obs contract identical to robot_world
-# (diff circle 0.2 / lidar 100 beams range 7 / vel [-1,1] / step 0.3).
+# (diff rectangle 0.4x0.3 / lidar 100 beams range 7 / vel [-1,1] / step 0.3, overridden to 0.0833s in train.yaml).
 world:
   height: 30
   width: 30

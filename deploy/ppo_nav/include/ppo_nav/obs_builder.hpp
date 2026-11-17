@@ -35,7 +35,7 @@ struct GoalPose {
 
 /// obs builder: exactly consistent with the training side's env/wrapper.py.
 /// layout: obs[0:num_beams]=normalized lidar, [num_beams:num_beams+3]=goal polar coordinates,
-///       [num_beams+3:]=previous action (N*action_dim, always 0 during PPO training, see setPrevChunk comment).
+///       [num_beams+3:]=previous action (N*action_dim, see setPrevChunk comment).
 class ObsBuilder {
  public:
   explicit ObsBuilder(const PlannerParams& params);
@@ -58,9 +58,8 @@ class ObsBuilder {
                 std::vector<float>& obs) const;
 
   /// Set the previous action (normalized [-1,1], per-dim training transform [lin*2, (ang+1)/2], zero-padded if short, truncated if long).
-  /// ⚠️ The current PPO model is trained through step_single, so the training-side "previous action" channel is always 0 —
-  ///    therefore deployment should NOT call this method by default (prev stays all zeros, consistent with the training distribution);
-  ///    enable it only for a model retrained with prev feedback (with planner param use_prev_action: true).
+  /// ⚠️ N=1 models are trained through step_single so this channel is always 0 -> keep use_prev_action: false;
+  ///    N=5 models encode the previous chunk's actions during training -> set use_prev_action: true.
   void setPrevChunk(const std::vector<float>& chunk) {
     prev_.assign(p_.prev_action_dim(), 0.f);
     const size_t n = std::min<size_t>(chunk.size(), prev_.size());

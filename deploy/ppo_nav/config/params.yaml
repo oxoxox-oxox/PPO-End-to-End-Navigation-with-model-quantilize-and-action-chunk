@@ -1,11 +1,11 @@
 # PPO deployment parameters (loaded into the global namespace via <rosparam command="load"> in launch)
 
 planner:
-  goal_x: 5.0            # goal x (odom_combined frame, relative to start)
+  goal_x: 5.0            # goal x (odom frame, relative to start)
   goal_y: 5.0            # goal y
   # Decisions are driven by the lidar frames (each new /scan triggers one serial inference), no fixed-period timer.
   # min_decision_period: minimum interval between consecutive decisions (seconds); 0 = pure lidar-frame-driven (~12Hz).
-  #   Training step_time=0.083s (1/12), frame-driven ≈12Hz, consistent with training, keep 0.
+  #   Training step_time=0.0833s (1/12), frame-driven ≈12Hz, consistent with training, keep 0.
   min_decision_period: 0.0
   scan_timeout: 0.5      # stop the robot if no scan is received within this duration
   debug_log: false
@@ -20,12 +20,13 @@ planner:
 
   # ---- action chunking ----
   # chunk_size: use 1 for N=1 models (obs 105); use 5 for N=5 models (obs 113, engine output 10 dims).
-  chunk_size: 1
+  # Overridable via planner.launch args (defaults to N=5 main experiment).
+  chunk_size: 5
 
   # ---- previous-action channel ----
   # ⚠️ N=1 models have prev always 0 during training -> false; N=5 models use the prev channel -> must be true.
   #    Must strictly match the model in use (see section 0 of runs/ablation_runbook.md).
-  use_prev_action: false
+  use_prev_action: true
 
   # ---- action mapping (real velocity from the clipped-to-[-1,1] μ) ----
   vel_min: [-1.0, -1.0]  # normalized action -> real velocity lower bound [lin, ang]

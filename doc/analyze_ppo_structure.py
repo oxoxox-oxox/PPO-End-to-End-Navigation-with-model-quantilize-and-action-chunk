@@ -2,7 +2,8 @@
 """Analyze the network structure of the SB3 PPO models in this repository (for reproducing doc/ppo_structure_analysis.md).
 
 Usage:
-    d:\anaconda\envs\rl_env\python.exe doc\analyze_ppo_structure.py
+    python doc/analyze_ppo_structure.py
+    python doc/analyze_ppo_structure.py checkpoints/ppo_final_N1/best_model.zip checkpoints/ppo_final_N5/best_model.zip
 """
 from __future__ import annotations
 
@@ -16,10 +17,12 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPORT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ppo_structure_report.txt")
 
 MODELS = [
+    "checkpoints/ppo_final_N1/best_model.zip",
+    "checkpoints/ppo_final_N1/ppo_model.zip",
+    "checkpoints/ppo_final_N5/best_model.zip",
+    "checkpoints/ppo_final_N5/ppo_model.zip",
     "checkpoints/ppo_N1/best_model.zip",
     "checkpoints/ppo_N1/ppo_model.zip",
-    "checkpoints/ppo_smoke_N1/best_model.zip",
-    "checkpoints/ppo_smoke_N1/ppo_model.zip",
 ]
 
 _LINES: list[str] = []
@@ -80,7 +83,7 @@ def analyze(path: str) -> None:
     n_val = count_params(pol.value_net)
     n_total = count_params(pol)
     _print("--- Param counts ---")
-    _print(f"  mlp_extractor (shared + two-headed pre-layer): {n_ext}")
+    _print(f"  mlp_extractor (policy_net + value_net) : {n_ext}")
     _print(f"  action_net                                : {n_act}")
     _print(f"  value_net (output layer)                 : {n_val}")
     _print(f"  total policy params                     : {n_total}")
@@ -105,7 +108,8 @@ if __name__ == "__main__":
     _print(f"python: {sys.executable}")
     _print(f"SB3: {__import__('stable_baselines3').__version__}  torch: {torch.__version__}")
     _print()
-    for p in MODELS:
+    targets = sys.argv[1:] if len(sys.argv) > 1 else MODELS
+    for p in targets:
         analyze(p)
     _print("done")
     with open(REPORT, "w", encoding="utf-8") as f:

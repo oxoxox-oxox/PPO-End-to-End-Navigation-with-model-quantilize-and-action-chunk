@@ -10,7 +10,7 @@ Method:
        trajectory (laser noise off) with FP32 and INT8 policies, counting success/collision/timeout and the paired divergence table.
 
 Usage:
-    d:\\anaconda\\envs\\rl_env\\python.exe src\\eval_quant_collision.py --episodes 300
+    python src/eval_quant_collision.py --episodes 300
 """
 from __future__ import annotations
 
